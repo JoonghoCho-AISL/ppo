@@ -1,10 +1,16 @@
-import gym
+import gymnasium as gym
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
+
+import numpy as np
+
+# real-time plotting
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 device = torch.device('mps:0' if torch.backends.mps.is_available() else 'cpu')
 
@@ -15,20 +21,23 @@ Lambda         = 0.95
 eps_clip      = 0.1
 K_epoch       = 3
 T_horizon     = 20
-hidden_size = 64
+hidden_size = 128
+state_space = 4
+action_space = 2
 
 class PPO(nn.Module):
     def __init__(self):
         super(PPO, self).__init__()
         self.data = []
-        
-        self.fc1   = nn.Linear(4,hidden_size)
-        self.fc_pi = nn.Linear(hidden_size,2)
+        self.fc1 = nn.Linear(state_space,hidden_size)
+        self.fc2 = nn.Linear(hidden_size,512)
+        self.fc_pi = nn.Linear(512,action_space)
         self.fc_v  = nn.Linear(hidden_size,1)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
 
     def pi(self, x, softmax_dim=0):
         x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
         x = self.fc_pi(x)
         prob = F.softmax(x, dim=softmax_dim)
         return prob
@@ -95,42 +104,49 @@ class PPO(nn.Module):
             self.optimizer.step()
 
 
+
+
 def main():
-    env = gym.make('CartPole-v1')
+    env = gym.make('CartPole-v1', render_mode='human')
     model = PPO().to(device)
     score = 0.0
     print_interval = 20
 
+    score_lst = list()
+    epi_lst = list()
+
     for n_epi in range(10000):
-        state = env.reset()
+        state, info = env.reset()
         done = False
         while not done:
+            
             for t in range(T_horizon):
-                env.render()
                 prob = model.pi(torch.from_numpy(state).float().to(device))
                 m = Categorical(prob)
                 action = m.sample().item()
-
-                # print(env.step(action))
-
-                state_prime, reward, done, info = env.step(action)
-                
-
+                state_prime, reward, done, truncated, info = env.step(action)                
                 model.put_data((state, action, reward/100.0, state_prime, prob[action].item(), done))
                 state = state_prime
-
                 score += reward
                 if done:
                     break
-
             model.train_net()
-
         if n_epi&print_interval==0 and n_epi!=0:
+            score_lst.append(score/print_interval)
+            epi_lst.append(n_epi)
             print('# of episode :{}, avg score : {:.1f}'.format(n_epi, score/print_interval))
             score = 0.0
+    env. close()
 
-        env. close()
+x_val = list()
+y_val = list()
+
+def animate(i):
+    x_val.append(next(score_lst))
+    y_val.append(next(epi_lst))
+    plt.cla()
+    plt.plot(x_val, y_val)
 
 if __name__ == '__main__':
-    print(device)
+    # print(device)
     main()
