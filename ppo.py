@@ -12,8 +12,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
-device = torch.device('mps:0' if torch.backends.mps.is_available() else 'cpu')
+# OS Check
+import platform
 
+os = platform.system()
+
+if os == 'Darwin':
+    device = torch.device('mps:0' if torch.backends.mps.is_available() else 'cpu')
+else:
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Hyperparameters
 learning_rate = 0.0005
 gamma         = 0.98
@@ -29,15 +36,17 @@ class PPO(nn.Module):
     def __init__(self):
         super(PPO, self).__init__()
         self.data = []
-        self.fc1 = nn.Linear(state_space,hidden_size)
-        self.fc2 = nn.Linear(hidden_size,512)
-        self.fc_pi = nn.Linear(512,action_space)
+        self.fc1 = nn.Linear(state_space, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, 512)
+        self.fc3 = nn.Linear(512, 1024)
+        self.fc_pi = nn.Linear(1024, action_space)
         self.fc_v  = nn.Linear(hidden_size,1)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
 
     def pi(self, x, softmax_dim=0):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
         x = self.fc_pi(x)
         prob = F.softmax(x, dim=softmax_dim)
         return prob
@@ -138,15 +147,15 @@ def main():
             score = 0.0
     env. close()
 
-x_val = list()
-y_val = list()
+# x_val = list()
+# y_val = list()
 
-def animate(i):
-    x_val.append(next(score_lst))
-    y_val.append(next(epi_lst))
-    plt.cla()
-    plt.plot(x_val, y_val)
+# def animate(i):
+#     x_val.append(next(score_lst))
+#     y_val.append(next(epi_lst))
+#     plt.cla()
+#     plt.plot(x_val, y_val)
 
 if __name__ == '__main__':
-    # print(device)
+    print(device)
     main()
